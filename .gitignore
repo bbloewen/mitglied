@@ -1,0 +1,6 @@
+.clasprc.json
+.DS_Store
+.claude/
+.vscode/
+.idea/
+node_modules/
