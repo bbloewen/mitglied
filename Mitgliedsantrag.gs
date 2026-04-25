@@ -36,7 +36,9 @@ function getCFG() {
     apiKey:      p.getProperty('CAMPAI_API_KEY'),
     orgId:       p.getProperty('CAMPAI_ORG_ID'),
     finApiKey:   p.getProperty('CAMPAI_FINANCE_API_KEY'),
-    mandantenId: p.getProperty('CAMPAI_MANDATE_ID'),
+    // Mitgliedsantrag legt nur LEV-Mitglieder an (Basketball Löwen e.V.).
+    // FVB/XXL-Mitglieder werden manuell oder über andere Skripte angelegt.
+    mandantenId: p.getProperty('CAMPAI_MANDATE_ID_LEV'),
     ...STATIC,
   };
 }
