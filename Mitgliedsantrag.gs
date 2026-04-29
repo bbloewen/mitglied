@@ -218,10 +218,9 @@ function createDebitor(contactId, d, cfg) {
   const iban    = (d.iban || '').replace(/\s/g, '').toUpperCase();
   const todayStr = fmtDate(new Date());
 
-  // BIC aus IBAN-Bankleitzahl ableiten (DE-IBANs: Stellen 5-12)
-  // Fallback: leerer BIC wird von campai ggf. automatisch ermittelt
-  const blz = iban.length >= 12 ? iban.substring(4, 12) : '';
-  const bic = blz ? 'COBADEFFXXX' : '';  // TODO: BLZ→BIC Lookup
+  // BIC bewusst NICHT mitgeschickt: Campai leitet ihn aus der IBAN selbst ab.
+  // Falls die Finance-API den BIC spaeter doch zwingend erwartet, hier eine
+  // echte BLZ→BIC-Lookup-Tabelle anbinden — kein Hardcode-Fallback!
 
   const payload = {
     type:              isFirma ? 'business' : 'person',
@@ -232,7 +231,6 @@ function createDebitor(contactId, d, cfg) {
     paymentMethodType: iban ? 'sepaDirectDebit' : null,
     sepaDirectDebitMandate: iban ? {
       iban:                     iban,
-      bic:                      bic,
       sepaMandateId:            STATIC.mandatPrefix + '-' + Date.now().toString(36).toUpperCase(),
       sepaMandateSignatureDate: todayStr,
       accountHolderName:        (d.kontoinhaber || fullName).substring(0, 80),
