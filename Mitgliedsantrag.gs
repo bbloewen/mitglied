@@ -519,7 +519,7 @@ function handleSpieler(d, cfg) {
   const age     = calcAge(d.geburtsdatum);
   const isMinor = age !== null && age < 18;
   const note    = isMinor
-    ? 'Minderjährig – Erziehungsberechtigte/r: '
+    ? 'Erziehungsberechtigte/r: '
       + (d.erziehVorname || '') + ' ' + (d.erziehNachname || '')
     : null;
 
