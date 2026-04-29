@@ -227,13 +227,15 @@ function createDebitor(contactId, d, cfg) {
 
   Logger.log('📤 Debitor-Payload (CRM-API): ' + JSON.stringify(payload));
 
-  // Auth mit Finance-API-Key: Debitor-Endpoint gehoert zur Finance-Domaene,
-  // der reine CRM-API-Key (cfg.apiKey) hat im Loewen-Account keine
-  // Berechtigung "create debtors" (HTTP 403 "User not authorized").
+  // Auth mit CRM-API-Key (cfg.apiKey): die CRM-API erwartet eine User-Session
+  // im Authorization-Header. Der Finance-API-Key ist ein reiner Service-Token
+  // ohne Session und scheitert mit "A user session is required". Der CRM-Key
+  // muss in Campai die Berechtigung zum Debitor-Anlegen haben (siehe
+  // API-Key-Verwaltung; Vollzugriff oder gezielte "create debtors"-Rolle).
   const res = UrlFetchApp.fetch(url, {
     method:  'post',
     headers: {
-      'Authorization': cfg.finApiKey,
+      'Authorization': cfg.apiKey,
       'Content-Type':  'application/json',
     },
     payload:            JSON.stringify(payload),
