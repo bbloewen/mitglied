@@ -12,18 +12,15 @@ const SEPA = {
   intervall:    'RCUR',
 };
 
-// TODO: Diese GROUPS-Eintraege sind aktuell NUR Bezeichnungen, KEINE Campai-
-// Object-IDs. Wenn man sie als groups[]-Werte uebergibt, speichert Campai
-// nackte Strings, die in der UI nicht aufloesbar sind → Kontakt laesst sich
-// in der Detail-Ansicht (BA) nicht oeffnen. Bis die echten Object-IDs aus
-// dem Campai-Admin nachgeholt sind (siehe inspectCampaiGroups in
-// MitgliedsantragTest.gs), wird groups[] in allen handle*-Funktionen leer
-// uebergeben. Die Konstante bleibt als Platzhalter / Bezeichner-Referenz.
+// Campai erwartet im Kontakt-Payload `groups: [<number-Code>]` — also den
+// zwei-/drei-stelligen `number`-Wert der Group, NICHT die ObjectID oder den
+// Anzeigenamen. Mapping per inspectCampaiGroups() ermittelt.
 const GROUPS = {
-  FM: 'FM - Fanmitglieder',
-  SP: 'SP - Spielerinnen',
-  SM: 'SM - Schulmitglieder',
-  FO: 'FÖ - Fördermitglieder',
+  OM:  'OM',  // Ordentliche Mitgliedschaft (stimmberechtigt)
+  FM:  'FM',  // Fanmitglied
+  SP:  'SP',  // Spielerinnen (Sport-Gruppe)
+  SM:  'SM',  // Schulmitglieder
+  FOE: 'FÖ',  // Foerdermitgliedschaft (Property-Name FOE, weil JS-Identifier ohne Umlaut)
 };
 
 const STATIC = {
@@ -415,7 +412,7 @@ function buildOrgPayload(d, cfg) {
         country: 'DE',
       },
       tags:   ['Neu', 'Förderer'],
-      groups: [],  // TODO: echte Campai-Group-Object-ID einsetzen, siehe GROUPS-Kommentar oben
+      groups: [GROUPS.FOE],
       notes:  [{ content: 'Ansprechpartner: '
         + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim() }],
       // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
@@ -440,7 +437,7 @@ function handleFan(d, cfg) {
   const tags   = hasErm ? ['Neu', 'Fan', 'Ermäßigt'] : ['Neu', 'Fan'];
   const note   = hasErm ? 'Ermäßigungskategorie: ' + d.ermaessigungKategorie : null;
 
-  const { _mandateRef, payload } = buildPersonPayload(d, tags, [], note, cfg);
+  const { _mandateRef, payload } = buildPersonPayload(d, tags, [GROUPS.FM], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -483,7 +480,7 @@ function handleFan(d, cfg) {
     };
 
     const { _mandateRef: fmRef, payload: fmPayload } = buildPersonPayload(
-      fmD, ['Neu', 'Fan'], [], fmNote, cfg);
+      fmD, ['Neu', 'Fan'], [GROUPS.FM], fmNote, cfg);
     const fc = createContact(fmPayload, cfg);
     if (fc.success) {
       createDebitor(fc.contactId, fmD, cfg);
@@ -512,7 +509,7 @@ function handleSpieler(d, cfg) {
     : null;
 
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Spieler'], [], note, cfg);
+    d, ['Neu', 'Spieler'], [GROUPS.SP], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -533,7 +530,7 @@ function handleSchule(d, cfg) {
     + (d.elternVorname || '') + ' ' + (d.elternNachname || '');
 
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Schule'], [], note, cfg);
+    d, ['Neu', 'Schule'], [GROUPS.SM], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -556,7 +553,7 @@ function handleFoerder(d, cfg) {
     typ   = 'Fördermitglied (Firma)';
   } else {
     built = buildPersonPayload(
-      d, ['Neu', 'Förderer'], [],
+      d, ['Neu', 'Förderer'], [GROUPS.FOE],
       'Fördermitglied Einzelperson', cfg);
     typ = 'Fördermitglied';
   }

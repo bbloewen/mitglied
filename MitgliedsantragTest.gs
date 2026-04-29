@@ -174,31 +174,39 @@ function inspectCampaiGroups() {
 }
 
 // ============================================================
-// REPAIR: Kaputte groups-Felder auf [] zuruecksetzen
+// REPAIR: groups-Feld eines Kontakts setzen
 // ============================================================
 // In der Uebergangsphase wurden Kontakte mit String-Werten in
 // groups[] angelegt (z.B. ['FM - Fanmitglieder']) statt mit
-// Object-IDs. Das macht den Kontakt in der Campai-UI nicht
-// oeffenbar. Diese Funktion patcht groups[] auf [] zurueck.
+// Campai-number-Codes ('FM', 'SP', 'SM', 'FÖ'). Das macht den
+// Kontakt in der Campai-UI nicht oeffenbar.
 //
-// Bei Bedarf das KAPUTT-Array unten erweitern.
+// Diese Funktion patcht groups[] auf den im Eintrag hinterlegten
+// Code (groups: ['SP'] etc.). Wenn ein Eintrag KEIN groups-Feld
+// hat, wird auf [] gepatcht (= keine Gruppe).
+//
+// Hinweis: Der Patch ueberschreibt die bestehende groups-Liste.
+// Wer in der Campai-UI manuell zusaetzliche Gruppen pflegt
+// (z.B. 'OM' als Sammelkategorie), muss diese danach manuell
+// wieder zuweisen — oder hier mit reinnehmen.
 // ============================================================
 function repairKaputteGroups() {
   const cfg = getCFG();
 
   const KAPUTT = [
-    { name: 'Janneke Susann Herbig', contactId: '69f06ee68c52248dfc4515c6' },
-    { name: 'Leni Amarell',          contactId: '69f10bce0027e63b43e876b0' },
+    { name: 'Janneke Susann Herbig', contactId: '69f06ee68c52248dfc4515c6', groups: ['SP'] },
+    { name: 'Leni Amarell',          contactId: '69f10bce0027e63b43e876b0', groups: ['SP'] },
   ];
 
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('▶ REPAIR: groups-Feld auf [] zuruecksetzen (' + KAPUTT.length + ' Kontakte)');
+  Logger.log('▶ REPAIR: groups setzen (' + KAPUTT.length + ' Kontakte)');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   let okCount = 0;
   KAPUTT.forEach(function(entry, i) {
-    Logger.log('━━━ [' + (i+1) + '/' + KAPUTT.length + '] ' + entry.name + ' (' + entry.contactId + ') ━━━');
-    const r = apiCall('patch', '/contacts/' + entry.contactId, { groups: [] }, cfg);
+    const groups = entry.groups || [];
+    Logger.log('━━━ [' + (i+1) + '/' + KAPUTT.length + '] ' + entry.name + ' → groups: ' + JSON.stringify(groups) + ' ━━━');
+    const r = apiCall('patch', '/contacts/' + entry.contactId, { groups: groups }, cfg);
     const ok = (r.code === 200 || r.code === 204);
     Logger.log('  HTTP ' + r.code + (ok ? ' ✅' : ' ❌'));
     if (!ok && r.json) Logger.log('  Antwort: ' + JSON.stringify(r.json));
