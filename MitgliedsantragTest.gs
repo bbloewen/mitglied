@@ -75,25 +75,41 @@ function testDebitor() {
 }
 
 // ============================================================
-// REPAIR: Debitor fuer Frau Herbig nachziehen
+// REPAIR: Debitoren fuer Antraege nachziehen, bei denen die
+// Debitor-Anlage urspruenglich fehlgeschlagen ist
 // ============================================================
-// Frau Herbig hat im Mai-Antrag einen Kontakt bekommen, aber kein
-// Debitor (wegen damals noch kaputter Finance-API + falscher Auth).
-// Diese Funktion zieht den Debitor auf ihrer existierenden Contact-ID
-// nach. Einmaliger Aufruf, dann kann diese Funktion weg.
+// Anlass: In der Uebergangsphase (kaputte Finance-API, BIC-Hardcode,
+// falsche Auth) sind mehrere Mitgliedsantraege mit Kontakt+billing
+// in Campai gelandet, aber ohne Debitor. Diese Funktion ruft die
+// jetzt funktionierende createDebitor()-Logik fuer jede betroffene
+// Contact-ID nach.
+//
+// Bei Bedarf einfach das FEHLEND-Array unten erweitern und nochmal
+// laufen lassen. Schon angelegte Debitoren werden von Campai mit
+// einem Fehler quittiert (kein Schaden, im Log sichtbar).
 // ============================================================
-function repairDebitorHerbig() {
+function repairFehlendeDebitoren() {
   const cfg = getCFG();
-  const contactId = '69f06ee68c52248dfc4515c6';
+
+  const FEHLEND = [
+    // Janneke Susann Herbig (69f06ee68c52248dfc4515c6) — am 29.04. nachgezogen
+    { name: 'Leni Amarell', contactId: '69f10bce0027e63b43e876b0' },
+  ];
 
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('▶ REPAIR: createDebitor fuer Frau Herbig nachziehen');
-  Logger.log('  contactId: ' + contactId);
+  Logger.log('▶ REPAIR: ' + FEHLEND.length + ' Debitoren nachziehen');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-  const ok = createDebitor(contactId, {}, cfg);
+  let okCount = 0;
+  FEHLEND.forEach(function(entry, i) {
+    Logger.log('━━━ [' + (i+1) + '/' + FEHLEND.length + '] ' + entry.name + ' ━━━');
+    Logger.log('  contactId: ' + entry.contactId);
+    const ok = createDebitor(entry.contactId, {}, cfg);
+    if (ok) okCount++;
+    Logger.log(ok ? '✅ Debitor angelegt' : '❌ Fehlgeschlagen — siehe API-Antwort oben');
+  });
 
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log(ok ? '✅ Debitor erfolgreich nachgezogen' : '❌ Debitor-Anlage fehlgeschlagen — siehe API-Antwort oben');
+  Logger.log('Fertig: ' + okCount + ' von ' + FEHLEND.length + ' erfolgreich');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
