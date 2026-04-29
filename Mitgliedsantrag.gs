@@ -227,10 +227,13 @@ function createDebitor(contactId, d, cfg) {
 
   Logger.log('📤 Debitor-Payload (CRM-API): ' + JSON.stringify(payload));
 
+  // Auth mit Finance-API-Key: Debitor-Endpoint gehoert zur Finance-Domaene,
+  // der reine CRM-API-Key (cfg.apiKey) hat im Loewen-Account keine
+  // Berechtigung "create debtors" (HTTP 403 "User not authorized").
   const res = UrlFetchApp.fetch(url, {
     method:  'post',
     headers: {
-      'Authorization': cfg.apiKey,
+      'Authorization': cfg.finApiKey,
       'Content-Type':  'application/json',
     },
     payload:            JSON.stringify(payload),
