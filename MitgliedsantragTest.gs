@@ -73,3 +73,27 @@ function testDebitor() {
   Logger.log('  Test-Kontakt-ID zum Aufraeumen in Campai: ' + c.contactId);
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
+
+// ============================================================
+// REPAIR: Debitor fuer Frau Herbig nachziehen
+// ============================================================
+// Frau Herbig hat im Mai-Antrag einen Kontakt bekommen, aber kein
+// Debitor (wegen damals noch kaputter Finance-API + falscher Auth).
+// Diese Funktion zieht den Debitor auf ihrer existierenden Contact-ID
+// nach. Einmaliger Aufruf, dann kann diese Funktion weg.
+// ============================================================
+function repairDebitorHerbig() {
+  const cfg = getCFG();
+  const contactId = '69f06ee68c52248dfc4515c6';
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ REPAIR: createDebitor fuer Frau Herbig nachziehen');
+  Logger.log('  contactId: ' + contactId);
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  const ok = createDebitor(contactId, {}, cfg);
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log(ok ? '✅ Debitor erfolgreich nachgezogen' : '❌ Debitor-Anlage fehlgeschlagen — siehe API-Antwort oben');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
