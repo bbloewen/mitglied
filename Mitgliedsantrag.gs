@@ -111,6 +111,19 @@ function fmtDate(d) {
     + String(d.getDate()).padStart(2,'0');
 }
 
+// Telefonnummer in internationales Format normalisieren:
+// "0361 12 34 56" / "03611234567" / "0049 361 ..." → "+4936112345..."
+// Bereits vorhandenes "+" bleibt erhalten. Leere Eingabe → null.
+function formatPhone(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/[\s\-()/.]/g, '');
+  if (!cleaned) return null;
+  if (cleaned.indexOf('+') === 0)  return cleaned;
+  if (cleaned.indexOf('00') === 0) return '+' + cleaned.substring(2);
+  if (cleaned.indexOf('0') === 0)  return '+49' + cleaned.substring(1);
+  return cleaned;
+}
+
 function jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
@@ -359,7 +372,8 @@ function buildPersonPayload(d, tags, groups, extraNote, cfg) {
       personal:     personal,
       communication: {
         email:             (d.email   || '').trim(),
-        regularPhone:      (d.telefon || '').trim() || null,
+        regularPhone:      null,
+        mobilePhone:       formatPhone(d.telefon),
         defaultSendMethod: 'email',
       },
       address: {
@@ -402,7 +416,8 @@ function buildOrgPayload(d, cfg) {
       },
       communication: {
         email:             (d.email   || '').trim(),
-        regularPhone:      (d.telefon || '').trim() || null,
+        regularPhone:      null,
+        mobilePhone:       formatPhone(d.telefon),
         defaultSendMethod: 'email',
       },
       address: {
