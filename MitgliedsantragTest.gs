@@ -113,3 +113,97 @@ function repairFehlendeDebitoren() {
   Logger.log('Fertig: ' + okCount + ' von ' + FEHLEND.length + ' erfolgreich');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
+
+// ============================================================
+// DIAGNOSE: Campai Groups inspizieren
+// ============================================================
+// Probiert mehrere wahrscheinliche Endpoints, um die echten
+// Campai-Group-Object-IDs herauszufinden, plus liest einen
+// existierenden Kontakt aus, um zu sehen, was Campai aktuell
+// als groups-Wert speichert (nach unserem fehlerhaften
+// String-Eintrag).
+//
+// Ziel: Aus den Logs ableiten, welche ObjectIDs in der GROUPS-
+// Konstante stehen muessen, damit Mitglieder kuenftig korrekt
+// ihrer Gruppe zugeordnet werden.
+// ============================================================
+function inspectCampaiGroups() {
+  const cfg = getCFG();
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ INSPEKTION: Campai Groups');
+  Logger.log('  cfg.orgId: ' + cfg.orgId);
+  Logger.log('  cfg.baseUrl: ' + cfg.baseUrl);
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  // 1. Existierenden Kontakt holen, um den aktuellen groups-Wert zu sehen
+  const sampleContactId = '69f06ee68c52248dfc4515c6';  // Frau Herbig
+  Logger.log('▶ Schritt 1: GET /contacts/' + sampleContactId);
+  const r1 = apiCall('get', '/contacts/' + sampleContactId, undefined, cfg);
+  Logger.log('  HTTP ' + r1.code);
+  if (r1.json) {
+    Logger.log('  groups (Antwort): ' + JSON.stringify(r1.json.groups));
+    Logger.log('  tags (Antwort):   ' + JSON.stringify(r1.json.tags));
+  }
+
+  // 2. Wahrscheinliche Group-Listen-Endpoints durchprobieren
+  const tries = [
+    '/groups?organisation=' + cfg.orgId,
+    '/contactGroups?organisation=' + cfg.orgId,
+    '/contact-groups?organisation=' + cfg.orgId,
+    '/organisations/' + cfg.orgId + '/groups',
+    '/organisation/' + cfg.orgId + '/groups',
+  ];
+
+  tries.forEach(function(path) {
+    Logger.log('▶ Schritt 2: GET ' + path);
+    const r = apiCall('get', path, undefined, cfg);
+    Logger.log('  HTTP ' + r.code);
+    if (r.code === 200 && r.json) {
+      Logger.log('  Antwort (erste 800 Zeichen): ' + JSON.stringify(r.json).substring(0, 800));
+    } else if (r.json) {
+      Logger.log('  Fehler: ' + JSON.stringify(r.json).substring(0, 200));
+    }
+  });
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Inspektion fertig. Ermittelte Group-IDs ggf. in GROUPS-Konstante eintragen.');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
+// ============================================================
+// REPAIR: Kaputte groups-Felder auf [] zuruecksetzen
+// ============================================================
+// In der Uebergangsphase wurden Kontakte mit String-Werten in
+// groups[] angelegt (z.B. ['FM - Fanmitglieder']) statt mit
+// Object-IDs. Das macht den Kontakt in der Campai-UI nicht
+// oeffenbar. Diese Funktion patcht groups[] auf [] zurueck.
+//
+// Bei Bedarf das KAPUTT-Array unten erweitern.
+// ============================================================
+function repairKaputteGroups() {
+  const cfg = getCFG();
+
+  const KAPUTT = [
+    { name: 'Janneke Susann Herbig', contactId: '69f06ee68c52248dfc4515c6' },
+    { name: 'Leni Amarell',          contactId: '69f10bce0027e63b43e876b0' },
+  ];
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ REPAIR: groups-Feld auf [] zuruecksetzen (' + KAPUTT.length + ' Kontakte)');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  let okCount = 0;
+  KAPUTT.forEach(function(entry, i) {
+    Logger.log('━━━ [' + (i+1) + '/' + KAPUTT.length + '] ' + entry.name + ' (' + entry.contactId + ') ━━━');
+    const r = apiCall('patch', '/contacts/' + entry.contactId, { groups: [] }, cfg);
+    const ok = (r.code === 200 || r.code === 204);
+    Logger.log('  HTTP ' + r.code + (ok ? ' ✅' : ' ❌'));
+    if (!ok && r.json) Logger.log('  Antwort: ' + JSON.stringify(r.json));
+    if (ok) okCount++;
+  });
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Fertig: ' + okCount + ' von ' + KAPUTT.length + ' erfolgreich');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}

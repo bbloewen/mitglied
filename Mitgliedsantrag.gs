@@ -12,6 +12,13 @@ const SEPA = {
   intervall:    'RCUR',
 };
 
+// TODO: Diese GROUPS-Eintraege sind aktuell NUR Bezeichnungen, KEINE Campai-
+// Object-IDs. Wenn man sie als groups[]-Werte uebergibt, speichert Campai
+// nackte Strings, die in der UI nicht aufloesbar sind → Kontakt laesst sich
+// in der Detail-Ansicht (BA) nicht oeffnen. Bis die echten Object-IDs aus
+// dem Campai-Admin nachgeholt sind (siehe inspectCampaiGroups in
+// MitgliedsantragTest.gs), wird groups[] in allen handle*-Funktionen leer
+// uebergeben. Die Konstante bleibt als Platzhalter / Bezeichner-Referenz.
 const GROUPS = {
   FM: 'FM - Fanmitglieder',
   SP: 'SP - Spielerinnen',
@@ -298,8 +305,11 @@ function uploadNachweisZuDrive(contactId, fileName, mimeType, base64Data, cfg) {
       + ' | ' + new Date().toLocaleDateString('de-DE'));
     const link = file.getUrl();
     Logger.log('✅ Nachweis in Drive abgelegt: ' + link);
-    apiCall('patch', '/contacts/' + contactId,
-      { notes: [{ content: '📎 Ermäßigungsnachweis (Drive): ' + link }] }, cfg);
+    // KEIN PATCH mit zweiter Notiz mehr: ein Kontakt soll genau eine Notiz
+    // tragen (BCE-Stil). Ein zweiter notes-Patch koennte je nach Campai-API-
+    // Verhalten den initialen Notiz-Inhalt ersetzen oder UI-Probleme machen.
+    // Der Drive-Link laesst sich ueber die campai-ID in der Datei-Description
+    // jederzeit zurueckverfolgen (siehe setDescription oben).
     return { success: true, source: 'drive', link };
   } catch(err) {
     Logger.log('❌ Drive-Upload fehlgeschlagen: ' + err.message);
@@ -405,7 +415,7 @@ function buildOrgPayload(d, cfg) {
         country: 'DE',
       },
       tags:   ['Neu', 'Förderer'],
-      groups: [GROUPS.FO],
+      groups: [],  // TODO: echte Campai-Group-Object-ID einsetzen, siehe GROUPS-Kommentar oben
       notes:  [{ content: 'Ansprechpartner: '
         + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim() }],
       // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
@@ -430,7 +440,7 @@ function handleFan(d, cfg) {
   const tags   = hasErm ? ['Neu', 'Fan', 'Ermäßigt'] : ['Neu', 'Fan'];
   const note   = hasErm ? 'Ermäßigungskategorie: ' + d.ermaessigungKategorie : null;
 
-  const { _mandateRef, payload } = buildPersonPayload(d, tags, [GROUPS.FM], note, cfg);
+  const { _mandateRef, payload } = buildPersonPayload(d, tags, [], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -473,7 +483,7 @@ function handleFan(d, cfg) {
     };
 
     const { _mandateRef: fmRef, payload: fmPayload } = buildPersonPayload(
-      fmD, ['Neu', 'Fan'], [GROUPS.FM], fmNote, cfg);
+      fmD, ['Neu', 'Fan'], [], fmNote, cfg);
     const fc = createContact(fmPayload, cfg);
     if (fc.success) {
       createDebitor(fc.contactId, fmD, cfg);
@@ -502,7 +512,7 @@ function handleSpieler(d, cfg) {
     : null;
 
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Spieler'], [GROUPS.SP], note, cfg);
+    d, ['Neu', 'Spieler'], [], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -523,7 +533,7 @@ function handleSchule(d, cfg) {
     + (d.elternVorname || '') + ' ' + (d.elternNachname || '');
 
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Schule'], [GROUPS.SM], note, cfg);
+    d, ['Neu', 'Schule'], [], note, cfg);
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
@@ -546,7 +556,7 @@ function handleFoerder(d, cfg) {
     typ   = 'Fördermitglied (Firma)';
   } else {
     built = buildPersonPayload(
-      d, ['Neu', 'Förderer'], [GROUPS.FO],
+      d, ['Neu', 'Förderer'], [],
       'Fördermitglied Einzelperson', cfg);
     typ = 'Fördermitglied';
   }
