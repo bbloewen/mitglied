@@ -206,51 +206,32 @@ function createContact(payload, cfg) {
   return { success: true, contactId: res.json._id };
 }
 
-// Debitor über die neue Finance API anlegen
+// Debitor über die alte CRM-API anlegen (BCE-Style, Minimal-Body)
+//
+// Warum nicht die neue Finance-API? Die Finance-API verlangt einen BIC
+// im SEPA-Mandat-Block ("sepaDirectDebitMandate.bic: Muss ausgefüllt
+// werden") und leitet ihn nicht aus der IBAN ab. Eine BLZ→BIC-Lookup-
+// Tabelle waere zusaetzliche Wartungslast (Bundesbank veroeffentlicht
+// alle 3 Monate eine neue Datei). Die alte CRM-API kommt mit einem
+// minimalen Body aus — Campai zieht IBAN, Kontoinhaber, Mandate-ID
+// usw. aus der `billing`-Sektion des bereits angelegten Kontakts.
+//
+// Voraussetzung: Der Kontakt-Payload (siehe buildPersonPayload) enthaelt
+// bei SEPA-Mitgliedschaften eine vollstaendige `billing`-Sektion mit
+// sepaIBAN, sepaAccountOwner, billingMethod="sepaDirectDebit",
+// sepaMandateId, sepaMandateSignatureDate.
 function createDebitor(contactId, d, cfg) {
   Utilities.sleep(1000);
-  const fullName = ((d.vorname||'') + ' ' + (d.nachname||'')).trim();
-  const isFirma  = !!(d.firmenname && d.firmenname.trim());
-  const url = 'https://cloud.campai.com/api/'
-    + cfg.orgId + '/' + cfg.mandantenId
-    + '/finance/accounts/debtors';
+  const url     = cfg.baseUrl + '/contacts/' + contactId + '/debtors/createDebtor';
+  const payload = { mandateId: cfg.mandantenId };
 
-  const iban    = (d.iban || '').replace(/\s/g, '').toUpperCase();
-  const todayStr = fmtDate(new Date());
-
-  // BIC bewusst NICHT mitgeschickt: Campai leitet ihn aus der IBAN selbst ab.
-  // Falls die Finance-API den BIC spaeter doch zwingend erwartet, hier eine
-  // echte BLZ→BIC-Lookup-Tabelle anbinden — kein Hardcode-Fallback!
-
-  const payload = {
-    type:              isFirma ? 'business' : 'person',
-    name:              isFirma ? d.firmenname.trim() : fullName,
-    contact:           contactId,
-    email:             (d.email || '').trim(),
-    receiptSendMethod: d.email ? 'email' : 'none',
-    paymentMethodType: iban ? 'sepaDirectDebit' : null,
-    sepaDirectDebitMandate: iban ? {
-      iban:                     iban,
-      sepaMandateId:            STATIC.mandatPrefix + '-' + Date.now().toString(36).toUpperCase(),
-      sepaMandateSignatureDate: todayStr,
-      accountHolderName:        (d.kontoinhaber || fullName).substring(0, 80),
-      accountHolderAddress:     {
-        addressLine: (d.strasse || '').trim() || '-',
-        zip:         (d.plz     || '').trim(),
-        city:        (d.ort     || '').trim(),
-        country:     'DE',
-      },
-    } : null,
-    birthdate:         d.geburtsdatum || null,
-  };
-
-  Logger.log('📤 Debitor-Payload: ' + JSON.stringify(payload));
+  Logger.log('📤 Debitor-Payload (CRM-API): ' + JSON.stringify(payload));
 
   const res = UrlFetchApp.fetch(url, {
     method:  'post',
     headers: {
-      'X-API-Key':    cfg.finApiKey,
-      'Content-Type': 'application/json',
+      'Authorization': cfg.apiKey,
+      'Content-Type':  'application/json',
     },
     payload:            JSON.stringify(payload),
     muteHttpExceptions: true,
