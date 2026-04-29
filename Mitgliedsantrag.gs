@@ -364,14 +364,16 @@ function buildPersonPayload(d, tags, groups, extraNote, cfg) {
       tags:   tags,
       groups: groups,
       notes:  [{ content: noteLines.join('\n') }],
-      billing: iban ? {
+      // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
+      // billing wird daher immer gesetzt.
+      billing: {
         sepaIBAN:                 iban,
         sepaAccountOwner:         (d.kontoinhaber || '').trim(),
         invoiceSendMethod:        'email',
         billingMethod:            'sepaDirectDebit',
         sepaMandateId:            mandateRef,
         sepaMandateSignatureDate: now,
-      } : undefined,
+      },
     },
   };
 }
@@ -406,14 +408,16 @@ function buildOrgPayload(d, cfg) {
       groups: [GROUPS.FO],
       notes:  [{ content: 'Ansprechpartner: '
         + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim() }],
-      billing: iban ? {
+      // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
+      // billing wird daher immer gesetzt.
+      billing: {
         sepaIBAN:                 iban,
         sepaAccountOwner:         (d.kontoinhaber || '').trim(),
         invoiceSendMethod:        'email',
         billingMethod:            'sepaDirectDebit',
         sepaMandateId:            mandateRef,
         sepaMandateSignatureDate: now,
-      } : undefined,
+      },
     },
   };
 }
