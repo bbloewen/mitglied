@@ -146,28 +146,30 @@ function inspectCampaiGroups() {
     Logger.log('  tags (Antwort):   ' + JSON.stringify(r1.json.tags));
   }
 
-  // 2. Wahrscheinliche Group-Listen-Endpoints durchprobieren
-  const tries = [
-    '/groups?organisation=' + cfg.orgId,
-    '/contactGroups?organisation=' + cfg.orgId,
-    '/contact-groups?organisation=' + cfg.orgId,
-    '/organisations/' + cfg.orgId + '/groups',
-    '/organisation/' + cfg.orgId + '/groups',
-  ];
+  // 2. Group-Liste vollstaendig auflisten (Endpoint /contactGroups ist
+  //    der bestaetigte Treffer; nutzt 'number' als groups[]-Wert)
+  const path = '/contactGroups?organisation=' + cfg.orgId;
+  Logger.log('▶ Schritt 2: GET ' + path);
+  const r = apiCall('get', path, undefined, cfg);
+  Logger.log('  HTTP ' + r.code);
 
-  tries.forEach(function(path) {
-    Logger.log('▶ Schritt 2: GET ' + path);
-    const r = apiCall('get', path, undefined, cfg);
-    Logger.log('  HTTP ' + r.code);
-    if (r.code === 200 && r.json) {
-      Logger.log('  Antwort (erste 800 Zeichen): ' + JSON.stringify(r.json).substring(0, 800));
-    } else if (r.json) {
-      Logger.log('  Fehler: ' + JSON.stringify(r.json).substring(0, 200));
-    }
-  });
+  if (r.code === 200 && Array.isArray(r.json)) {
+    Logger.log('  Anzahl Gruppen: ' + r.json.length);
+    Logger.log('  ─────────────────────────────────────────────');
+    Logger.log('  number  |  name                                |  _id');
+    Logger.log('  ─────────────────────────────────────────────');
+    r.json.forEach(function(g) {
+      const num  = (g.number || '').padEnd(7);
+      const name = (g.name   || '').padEnd(36);
+      Logger.log('  ' + num + ' |  ' + name + ' |  ' + g._id);
+    });
+  } else if (r.json) {
+    Logger.log('  Fehler: ' + JSON.stringify(r.json).substring(0, 300));
+  }
 
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('Inspektion fertig. Ermittelte Group-IDs ggf. in GROUPS-Konstante eintragen.');
+  Logger.log('Inspektion fertig. Die "number"-Werte sind die richtigen');
+  Logger.log('Eintraege fuer das groups[]-Feld im Kontakt-Payload.');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
