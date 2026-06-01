@@ -287,7 +287,7 @@ function inspectContactByName() {
 // Variante mit Contact-ID, falls die Suche nicht klappt
 function inspectContactById() {
   const cfg = getCFG();
-  const contactId = 'HIER_CONTACT_ID_EINTRAGEN';
+  const contactId = '6a1d38ae9ecaf4e4ac566540';  // Willi Ganzmann
 
   if (contactId === 'HIER_CONTACT_ID_EINTRAGEN') {
     Logger.log('❌ Bitte erst contactId in der Funktion eintragen.');
