@@ -498,8 +498,9 @@ function handleFan(d, cfg) {
       iban:         d.iban,
     };
 
+    const fmTags = isChild ? ['Neu', 'Fan', 'Fankind'] : ['Neu', 'Fan'];
     const { _mandateRef: fmRef, payload: fmPayload } = buildPersonPayload(
-      fmD, ['Neu', 'Fan'], [GROUPS.FM], fmNote, cfg);
+      fmD, fmTags, [GROUPS.FM], fmNote, cfg);
     const fc = createContact(fmPayload, cfg);
     if (fc.success) {
       createDebitor(fc.contactId, fmD, cfg);

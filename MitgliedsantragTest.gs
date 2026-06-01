@@ -322,6 +322,47 @@ function repairAlternateContacts() {
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
+// ============================================================
+// REPAIR: tags-Liste fuer Fankinder setzen
+// ============================================================
+// Bestehende Familienmitglieder (Kinder) haben das Tag 'Fankind'
+// nicht bekommen, weil der Code es bisher nicht setzte. Diese
+// Funktion patcht die tags-Liste komplett auf
+// ['Neu', 'Fan', 'Fankind'] fuer die angegebenen Contact-IDs.
+//
+// ACHTUNG: PATCH ueberschreibt die tags-Liste komplett. Wer in
+// der Campai-UI manuell zusaetzliche Tags angelegt hat, muss sie
+// hier mit aufnehmen oder nachtraeglich wieder zuweisen.
+// ============================================================
+function repairFankindTags() {
+  const cfg = getCFG();
+
+  const FANKINDER = [
+    { name: 'Willi Ganzmann', contactId: '6a1d38c94543260750492af9' },
+    { name: 'Emil Ganzmann',  contactId: '6a1d38b9f10900b3e2742d4d' },
+  ];
+
+  const TAGS = ['Neu', 'Fan', 'Fankind'];
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ REPAIR: tags-Liste auf ' + JSON.stringify(TAGS) + ' (' + FANKINDER.length + ' Fankinder)');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  let okCount = 0;
+  FANKINDER.forEach(function(entry, i) {
+    Logger.log('━━━ [' + (i+1) + '/' + FANKINDER.length + '] ' + entry.name + ' ━━━');
+    const r = apiCall('patch', '/contacts/' + entry.contactId, { tags: TAGS }, cfg);
+    const ok = (r.code === 200 || r.code === 204);
+    Logger.log('  HTTP ' + r.code + (ok ? ' ✅' : ' ❌'));
+    if (!ok && r.json) Logger.log('  Antwort: ' + JSON.stringify(r.json));
+    if (ok) okCount++;
+  });
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Fertig: ' + okCount + ' von ' + FANKINDER.length + ' erfolgreich');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
 // Variante mit Contact-ID, falls die Suche nicht klappt
 function inspectContactById() {
   const cfg = getCFG();
