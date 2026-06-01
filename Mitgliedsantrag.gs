@@ -199,9 +199,13 @@ function findContactByEmail(email, cfg) {
   return null;
 }
 
+// alternateContacts erwartet Array von Objekten {description, contact}, NICHT
+// nackte String-IDs. Falsche Form fuehrt zu {description:null, contact:null}-
+// Skeletten in Campai, was das Rendering der Detail-Ansicht blockiert
+// (Kontakt nicht oeffenbar — gleiches Muster wie der frueher groups-Bug).
 function setAlternateContact(contactId, altContactId, cfg) {
   const res = apiCall('patch', '/contacts/' + contactId,
-    { alternateContacts: [altContactId] }, cfg);
+    { alternateContacts: [{ description: null, contact: altContactId }] }, cfg);
   if (res.code === 200 || res.code === 204) {
     Logger.log('✅ alternateContacts gesetzt: ' + contactId + ' → ' + altContactId);
   } else {

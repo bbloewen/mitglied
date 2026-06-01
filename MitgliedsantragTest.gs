@@ -284,6 +284,44 @@ function inspectContactByName() {
   Logger.log('  voller JSON (1800 Zeichen): ' + JSON.stringify(foundContact).substring(0, 1800));
 }
 
+// ============================================================
+// REPAIR: alternateContacts in korrekte Objekt-Form bringen
+// ============================================================
+// Familienmitglieder wurden mit alternateContacts: [<string-id>]
+// gepatcht — Campai speichert das als {description:null, contact:null}-
+// Skelett, was die Detail-Ansicht bricht. Diese Funktion patcht die
+// betroffenen Kontakte auf [{description: null, contact: <id>}].
+//
+// FAMILIE-Array bei Bedarf erweitern.
+// ============================================================
+function repairAlternateContacts() {
+  const cfg = getCFG();
+
+  const FAMILIE = [
+    { name: 'Willi Ganzmann', contactId: '6a1d38c94543260750492af9', hauptId: '6a1d38ae9ecaf4e4ac566540' },
+    { name: 'Emil Ganzmann',  contactId: '6a1d38b9f10900b3e2742d4d', hauptId: '6a1d38ae9ecaf4e4ac566540' },
+  ];
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ REPAIR: alternateContacts auf Objekt-Form (' + FAMILIE.length + ' Kontakte)');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  let okCount = 0;
+  FAMILIE.forEach(function(entry, i) {
+    Logger.log('━━━ [' + (i+1) + '/' + FAMILIE.length + '] ' + entry.name + ' → contact: ' + entry.hauptId + ' ━━━');
+    const r = apiCall('patch', '/contacts/' + entry.contactId,
+      { alternateContacts: [{ description: null, contact: entry.hauptId }] }, cfg);
+    const ok = (r.code === 200 || r.code === 204);
+    Logger.log('  HTTP ' + r.code + (ok ? ' ✅' : ' ❌'));
+    if (!ok && r.json) Logger.log('  Antwort: ' + JSON.stringify(r.json));
+    if (ok) okCount++;
+  });
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Fertig: ' + okCount + ' von ' + FAMILIE.length + ' erfolgreich');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
 // Variante mit Contact-ID, falls die Suche nicht klappt
 function inspectContactById() {
   const cfg = getCFG();
