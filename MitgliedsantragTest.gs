@@ -217,3 +217,95 @@ function repairKaputteGroups() {
   Logger.log('Fertig: ' + okCount + ' von ' + KAPUTT.length + ' erfolgreich');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
+
+// ============================================================
+// DIAGNOSE: Kontakt per Name finden + Struktur ausgeben
+// ============================================================
+// Probiert mehrere Such-Endpoints, listet Treffer und gibt den
+// ersten Treffer im Detail aus — speziell die Felder, die fuer
+// "Kontakt-nicht-oeffenbar"-Diagnose relevant sind:
+//   alternateContacts, groups, tags, notes, communication.
+//
+// Suchbegriff unten anpassen (vorbefuellt: "Willi Ganzmann").
+// ============================================================
+function inspectContactByName() {
+  const cfg = getCFG();
+  const searchTerm = 'Willi Ganzmann';  // ← hier ggf. anpassen
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ Suche nach: "' + searchTerm + '"');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  const params = [
+    'search=' + encodeURIComponent(searchTerm),
+    'q='      + encodeURIComponent(searchTerm),
+    'name='   + encodeURIComponent(searchTerm),
+    'personal.personLastName=' + encodeURIComponent('Ganzmann'),
+  ];
+
+  let foundContact = null;
+
+  params.forEach(function(p) {
+    const path = '/contacts?organisation=' + cfg.orgId + '&' + p;
+    Logger.log('▶ Versuch: ' + path);
+    const r = apiCall('get', path, undefined, cfg);
+    Logger.log('  HTTP ' + r.code);
+
+    if (r.code !== 200) {
+      if (r.json) Logger.log('  Fehler: ' + JSON.stringify(r.json).substring(0, 200));
+      return;
+    }
+
+    const arr = Array.isArray(r.json) ? r.json : (r.json && r.json.data) || [];
+    Logger.log('  Treffer: ' + arr.length);
+    arr.forEach(function(c) {
+      const p   = c.personal || {};
+      const com = c.communication || {};
+      const name = (p.personFirstName || p.organisationName || '') + ' ' + (p.personLastName || '');
+      Logger.log('    - ' + c._id + ' | ' + name.trim() + ' | ' + (com.email || ''));
+      if (!foundContact) foundContact = c;
+    });
+  });
+
+  if (!foundContact) {
+    Logger.log('⚠️ Kein Treffer. Bitte Contact-ID manuell holen und inspectContactById verwenden.');
+    return;
+  }
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ DETAILS des ersten Treffers (' + foundContact._id + ')');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('  groups:            ' + JSON.stringify(foundContact.groups));
+  Logger.log('  alternateContacts: ' + JSON.stringify(foundContact.alternateContacts));
+  Logger.log('  tags:              ' + JSON.stringify(foundContact.tags));
+  Logger.log('  notes:             ' + JSON.stringify(foundContact.notes));
+  Logger.log('  communication:     ' + JSON.stringify(foundContact.communication));
+  Logger.log('  billing:           ' + JSON.stringify(foundContact.billing));
+  Logger.log('  voller JSON (1800 Zeichen): ' + JSON.stringify(foundContact).substring(0, 1800));
+}
+
+// Variante mit Contact-ID, falls die Suche nicht klappt
+function inspectContactById() {
+  const cfg = getCFG();
+  const contactId = 'HIER_CONTACT_ID_EINTRAGEN';
+
+  if (contactId === 'HIER_CONTACT_ID_EINTRAGEN') {
+    Logger.log('❌ Bitte erst contactId in der Funktion eintragen.');
+    return;
+  }
+
+  Logger.log('▶ GET /contacts/' + contactId);
+  const r = apiCall('get', '/contacts/' + contactId, undefined, cfg);
+  Logger.log('  HTTP ' + r.code);
+  if (r.code !== 200) {
+    Logger.log('  Antwort: ' + JSON.stringify(r.json));
+    return;
+  }
+  const c = r.json;
+  Logger.log('  groups:            ' + JSON.stringify(c.groups));
+  Logger.log('  alternateContacts: ' + JSON.stringify(c.alternateContacts));
+  Logger.log('  tags:              ' + JSON.stringify(c.tags));
+  Logger.log('  notes:             ' + JSON.stringify(c.notes));
+  Logger.log('  communication:     ' + JSON.stringify(c.communication));
+  Logger.log('  voller JSON (1800 Zeichen): ' + JSON.stringify(c).substring(0, 1800));
+}
