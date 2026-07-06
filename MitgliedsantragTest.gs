@@ -449,6 +449,128 @@ function inspectDebtorSetup() {
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
+// ============================================================
+// EXPERIMENT: Zweiter Kontakt mit fremder IBAN
+// ============================================================
+// Zweck: Herausfinden, unter welchen Bedingungen Campai einen
+// Kontakt mit einer bereits verwendeten IBAN akzeptiert. Grundlage
+// fuer Variante-B-Umsetzung (Debitor-Sharing bei Ehepartner-etc.-
+// Faellen).
+//
+// Testet DREI Payload-Varianten (jede mit eigenem Test-Mustermann,
+// alle mit Matthias' IBAN):
+//   A) billing.sepaIBAN gesetzt wie normal, alternateContacts im
+//      initialen Payload → wie Familienmitglied, aber im gleichen
+//      POST statt via separatem PATCH
+//   B) OHNE billing.sepaIBAN → nur Kontakt anlegen, spaeter per
+//      PATCH billing.payer setzen
+//   C) billing.sepaIBAN gesetzt, billing.payer explizit auf
+//      Matthias → Payer-Referenz beim Anlegen
+//
+// KEIN createDebitor-Aufruf bei diesem Test — wir wollen erst wissen,
+// welche Kontakt-Anlage Campai akzeptiert.
+//
+// ACHTUNG: Legt bis zu 3 Test-Kontakte in Campai an. Bitte danach
+// manuell aufraeumen (Emails 'test-shared-iban-<n>-<ts>@…').
+// ============================================================
+function testSharedIbanContact() {
+  const cfg = getCFG();
+  const IBAN         = 'DE42120965970003627489';   // Matthias' IBAN
+  const MATTHIAS_ID  = '6a45499dcd02f771692fcff8'; // Matthias' Contact-ID
+  const OWNER_NAME   = 'Matthias Spading';         // Kontoinhaber
+  const ts           = Date.now();
+
+  const varianten = [
+    {
+      label: 'A: billing komplett + alternateContacts im Payload',
+      payload: {
+        createdAt: new Date().toISOString(),
+        type: 'contact',
+        enterDate: new Date().toISOString(),
+        personal: { type: 'malePerson', isPerson: true, personFirstName: 'MaxA', personLastName: 'Sharing-Test' },
+        communication: { email: 'test-shared-iban-A-' + ts + '@basketball-loewen.com', defaultSendMethod: 'email' },
+        tags: ['Test', 'IBAN-Share'],
+        groups: [],
+        notes: [{ content: 'Variante A: billing komplett + alternateContacts inline' }],
+        alternateContacts: [{ description: null, contact: MATTHIAS_ID }],
+        billing: {
+          sepaIBAN: IBAN,
+          sepaAccountOwner: OWNER_NAME,
+          invoiceSendMethod: 'email',
+          billingMethod: 'sepaDirectDebit',
+          sepaMandateId: 'BL-TEST-A-' + ts.toString(36).toUpperCase(),
+          sepaMandateSignatureDate: new Date().toISOString(),
+        },
+      }
+    },
+    {
+      label: 'B: OHNE billing (Kontakt ohne SEPA-Info)',
+      payload: {
+        createdAt: new Date().toISOString(),
+        type: 'contact',
+        enterDate: new Date().toISOString(),
+        personal: { type: 'malePerson', isPerson: true, personFirstName: 'MaxB', personLastName: 'Sharing-Test' },
+        communication: { email: 'test-shared-iban-B-' + ts + '@basketball-loewen.com', defaultSendMethod: 'email' },
+        tags: ['Test', 'IBAN-Share'],
+        groups: [],
+        notes: [{ content: 'Variante B: OHNE billing' }],
+        alternateContacts: [{ description: null, contact: MATTHIAS_ID }],
+      }
+    },
+    {
+      label: 'C: billing komplett + billing.payer auf Matthias',
+      payload: {
+        createdAt: new Date().toISOString(),
+        type: 'contact',
+        enterDate: new Date().toISOString(),
+        personal: { type: 'malePerson', isPerson: true, personFirstName: 'MaxC', personLastName: 'Sharing-Test' },
+        communication: { email: 'test-shared-iban-C-' + ts + '@basketball-loewen.com', defaultSendMethod: 'email' },
+        tags: ['Test', 'IBAN-Share'],
+        groups: [],
+        notes: [{ content: 'Variante C: billing.payer explizit gesetzt' }],
+        alternateContacts: [{ description: null, contact: MATTHIAS_ID }],
+        billing: {
+          sepaIBAN: IBAN,
+          sepaAccountOwner: OWNER_NAME,
+          invoiceSendMethod: 'email',
+          billingMethod: 'sepaDirectDebit',
+          sepaMandateId: 'BL-TEST-C-' + ts.toString(36).toUpperCase(),
+          sepaMandateSignatureDate: new Date().toISOString(),
+          payer: MATTHIAS_ID,
+        },
+      }
+    },
+  ];
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ EXPERIMENT: 3 Payload-Varianten mit Matthias\' IBAN');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  varianten.forEach(function(v, i) {
+    Logger.log('');
+    Logger.log('━━━ [' + (i+1) + '/3] ' + v.label + ' ━━━');
+    const r = apiCall('post', '/contacts?organisation=' + cfg.orgId, v.payload, cfg);
+    Logger.log('  HTTP ' + r.code);
+    if (r.code === 200 || r.code === 201) {
+      const id = r.json && r.json._id;
+      Logger.log('  ✅ Angelegt: ' + id);
+      const billing = r.json && r.json.billing;
+      Logger.log('  billing.sepaIBAN:   ' + (billing && billing.sepaIBAN));
+      Logger.log('  billing.debtor:     ' + (billing && billing.debtor));
+      Logger.log('  billing.debtorName: ' + (billing && billing.debtorName));
+      Logger.log('  billing.payer:      ' + (billing && billing.payer));
+      Logger.log('  altCntacts:         ' + JSON.stringify(r.json && r.json.alternateContacts));
+    } else {
+      Logger.log('  ❌ Fehler: ' + JSON.stringify(r.json).substring(0, 500));
+    }
+  });
+
+  Logger.log('');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Test-Kontakte ggf. manuell in Campai loeschen.');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
 // Variante mit Contact-ID, falls die Suche nicht klappt
 function inspectContactById() {
   const cfg = getCFG();
