@@ -199,6 +199,16 @@ function findContactByEmail(email, cfg) {
   return null;
 }
 
+// Formatiert den Namen eines geteilten IBAN-Kontakts fuer Log- und Mail-
+// Ausgaben (Person → "Vorname Nachname", Organisation → Firmenname).
+function sharedIbanName(c) {
+  if (!c || !c.personal) return 'anderes Mitglied';
+  const p = c.personal;
+  if (p.isOrganisation && p.organisationName) return p.organisationName;
+  const name = ((p.personFirstName || '') + ' ' + (p.personLastName || '')).trim();
+  return name || 'anderes Mitglied';
+}
+
 // Sucht einen bestehenden Kontakt anhand seiner SEPA-IBAN.
 // Liefert das VOLLSTAENDIGE Kontakt-Objekt (nicht nur die ID), weil die
 // aufrufende Stelle typischerweise auch billing.debtor und billing.payer
@@ -356,7 +366,13 @@ function uploadNachweisZuDrive(contactId, fileName, mimeType, base64Data, cfg) {
 // ============================================================
 // KONTAKT-PAYLOAD BUILDER
 // ============================================================
-function buildPersonPayload(d, tags, groups, extraNote, cfg) {
+// opts.sharedIbanContact: falls gesetzt (Ergebnis von findContactByIban)
+//   → Kontakt wird OHNE billing-Sektion angelegt (Debitor wird nicht
+//     angelegt; die Verwaltung ordnet das Mitglied in Campai UI
+//     manuell dem bestehenden Debitor zu). Statt billing wird
+//     alternateContacts inline gesetzt und die Notiz um einen
+//     entsprechenden Hinweis erweitert.
+function buildPersonPayload(d, tags, groups, extraNote, cfg, opts) {
   const now        = new Date().toISOString();
   const today      = new Date();
   const geb        = d.geburtsdatum ? new Date(d.geburtsdatum) : null;
@@ -371,9 +387,15 @@ function buildPersonPayload(d, tags, groups, extraNote, cfg) {
   const mandateRef = nextMandateRef();
   const iban       = (d.iban || '').replace(/\s/g, '').toUpperCase();
 
+  const shared = opts && opts.sharedIbanContact;
   const noteLines = ['Eintrittsdatum: ' + datumStr];
   if (alter !== null) noteLines.push('Alter bei Eintritt: ' + alter);
   if (extraNote) noteLines.push(extraNote);
+  if (shared) {
+    const sp = shared.personal || {};
+    const sharedName = ((sp.personFirstName || '') + ' ' + (sp.personLastName || '')).trim() || 'anderes Mitglied';
+    noteLines.push('IBAN geteilt mit ' + sharedName + ' — Debitor bitte manuell in Campai zuweisen.');
+  }
 
   // campai erlaubt: malePerson, femalePerson, diversePerson, organisation
   let persType = d.geschlecht || 'malePerson';
@@ -389,85 +411,103 @@ function buildPersonPayload(d, tags, groups, extraNote, cfg) {
     personal.personBirthday = d.geburtsdatum;
   }
 
-  return {
-    _mandateRef: mandateRef,
-    payload: {
-      createdAt:    now,
-      type:         'contact',
-      enterDate:    now,
-      personal:     personal,
-      communication: {
-        email:             (d.email   || '').trim(),
-        regularPhone:      null,
-        mobilePhone:       formatPhone(d.telefon),
-        defaultSendMethod: 'email',
-      },
-      address: {
-        street:  (d.strasse || '').trim(),
-        zip:     (d.plz     || '').trim(),
-        city:    (d.ort     || '').trim(),
-        country: 'DE',
-      },
-      tags:   tags,
-      groups: groups,
-      notes:  [{ content: noteLines.join('\n') }],
-      // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
-      // billing wird daher immer gesetzt.
-      billing: {
-        sepaIBAN:                 iban,
-        sepaAccountOwner:         (d.kontoinhaber || '').trim(),
-        invoiceSendMethod:        'email',
-        billingMethod:            'sepaDirectDebit',
-        sepaMandateId:            mandateRef,
-        sepaMandateSignatureDate: now,
-      },
+  const payload = {
+    createdAt:    now,
+    type:         'contact',
+    enterDate:    now,
+    personal:     personal,
+    communication: {
+      email:             (d.email   || '').trim(),
+      regularPhone:      null,
+      mobilePhone:       formatPhone(d.telefon),
+      defaultSendMethod: 'email',
     },
+    address: {
+      street:  (d.strasse || '').trim(),
+      zip:     (d.plz     || '').trim(),
+      city:    (d.ort     || '').trim(),
+      country: 'DE',
+    },
+    tags:   tags,
+    groups: groups,
+    notes:  [{ content: noteLines.join('\n') }],
   };
+
+  if (shared) {
+    // IBAN gehoert bereits einem anderen Kontakt → KEIN eigener Debitor,
+    // stattdessen Verknuepfung ueber alternateContacts. Verwaltung ordnet
+    // das Mitglied in Campai UI manuell dem bestehenden Debitor zu.
+    payload.alternateContacts = [{ description: null, contact: shared._id }];
+  } else {
+    // Standardfall: eigene billing-Sektion (Debitor wird per createDebitor
+    // im Anschluss angelegt). IBAN ist Pflicht fuer alle Mitgliedstypen
+    // (siehe doPost-Validation).
+    payload.billing = {
+      sepaIBAN:                 iban,
+      sepaAccountOwner:         (d.kontoinhaber || '').trim(),
+      invoiceSendMethod:        'email',
+      billingMethod:            'sepaDirectDebit',
+      sepaMandateId:            mandateRef,
+      sepaMandateSignatureDate: now,
+    };
+  }
+
+  return { _mandateRef: mandateRef, payload: payload };
 }
 
-function buildOrgPayload(d, cfg) {
+function buildOrgPayload(d, cfg, opts) {
   const now        = new Date().toISOString();
   const mandateRef = nextMandateRef();
   const iban       = (d.iban || '').replace(/\s/g, '').toUpperCase();
-  return {
-    _mandateRef: mandateRef,
-    payload: {
-      createdAt:    now,
-      type:         'contact',
-      enterDate:    now,
-      personal: {
-        type:             'organisation',
-        isOrganisation:   true,
-        organisationName: (d.firmenname || '').trim(),
-      },
-      communication: {
-        email:             (d.email   || '').trim(),
-        regularPhone:      null,
-        mobilePhone:       formatPhone(d.telefon),
-        defaultSendMethod: 'email',
-      },
-      address: {
-        street:  (d.strasse || '').trim(),
-        zip:     (d.plz     || '').trim(),
-        city:    (d.ort     || '').trim(),
-        country: 'DE',
-      },
-      tags:   ['Neu', 'Förderer'],
-      groups: [GROUPS.FOE],
-      notes:  [{ content: 'Ansprechpartner: '
-        + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim() }],
-      // IBAN ist Pflicht fuer alle Mitgliedstypen (siehe doPost-Validation),
-      // billing wird daher immer gesetzt.
-      billing: {
-        sepaIBAN:                 iban,
-        sepaAccountOwner:         (d.kontoinhaber || '').trim(),
-        invoiceSendMethod:        'email',
-        billingMethod:            'sepaDirectDebit',
-        sepaMandateId:            mandateRef,
-        sepaMandateSignatureDate: now,
-      },
+  const shared     = opts && opts.sharedIbanContact;
+  const noteContent = shared
+    ? ('Ansprechpartner: '
+        + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim()
+        + '\nIBAN geteilt mit einem bestehenden Kontakt — Debitor bitte manuell in Campai zuweisen.')
+    : ('Ansprechpartner: '
+        + (d.vorname||'').trim() + ' ' + (d.nachname||'').trim());
+
+  const payload = {
+    createdAt:    now,
+    type:         'contact',
+    enterDate:    now,
+    personal: {
+      type:             'organisation',
+      isOrganisation:   true,
+      organisationName: (d.firmenname || '').trim(),
     },
+    communication: {
+      email:             (d.email   || '').trim(),
+      regularPhone:      null,
+      mobilePhone:       formatPhone(d.telefon),
+      defaultSendMethod: 'email',
+    },
+    address: {
+      street:  (d.strasse || '').trim(),
+      zip:     (d.plz     || '').trim(),
+      city:    (d.ort     || '').trim(),
+      country: 'DE',
+    },
+    tags:   ['Neu', 'Förderer'],
+    groups: [GROUPS.FOE],
+    notes:  [{ content: noteContent }],
   };
+
+  if (shared) {
+    // IBAN gehoert bereits einem anderen Kontakt → keine eigene billing-
+    // Sektion, stattdessen Verknuepfung ueber alternateContacts.
+    payload.alternateContacts = [{ description: null, contact: shared._id }];
+  } else {
+    payload.billing = {
+      sepaIBAN:                 iban,
+      sepaAccountOwner:         (d.kontoinhaber || '').trim(),
+      invoiceSendMethod:        'email',
+      billingMethod:            'sepaDirectDebit',
+      sepaMandateId:            mandateRef,
+      sepaMandateSignatureDate: now,
+    };
+  }
+  return { _mandateRef: mandateRef, payload: payload };
 }
 
 // ============================================================
@@ -478,12 +518,18 @@ function handleFan(d, cfg) {
   const tags   = hasErm ? ['Neu', 'Fan', 'Ermäßigt'] : ['Neu', 'Fan'];
   const note   = hasErm ? 'Ermäßigungskategorie: ' + d.ermaessigungKategorie : null;
 
-  const { _mandateRef, payload } = buildPersonPayload(d, tags, [GROUPS.FM], note, cfg);
+  const sharedContact = findContactByIban(d.iban, cfg);
+  const { _mandateRef, payload } = buildPersonPayload(
+    d, tags, [GROUPS.FM], note, cfg, { sharedIbanContact: sharedContact });
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
-  if (!createDebitor(c.contactId, d, cfg))
+  if (sharedContact) {
+    sendAdminWarning(d, c.contactId,
+      'IBAN geteilt mit ' + sharedIbanName(sharedContact) + ' — Debitor bitte manuell in Campai zuweisen', cfg);
+  } else if (!createDebitor(c.contactId, d, cfg)) {
     sendAdminWarning(d, c.contactId, 'Debitor konnte nicht angelegt werden', cfg);
+  }
 
   // Nachweis-Upload (optional)
   if (hasErm && d.nachweisBase64 && d.nachweisMimeType) {
@@ -550,13 +596,18 @@ function handleSpieler(d, cfg) {
       + (d.erziehVorname || '') + ' ' + (d.erziehNachname || '')
     : null;
 
+  const sharedContact = findContactByIban(d.iban, cfg);
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Spieler'], [GROUPS.SP], note, cfg);
+    d, ['Neu', 'Spieler'], [GROUPS.SP], note, cfg, { sharedIbanContact: sharedContact });
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
-  if (!createDebitor(c.contactId, d, cfg))
+  if (sharedContact) {
+    sendAdminWarning(d, c.contactId,
+      'IBAN geteilt mit ' + sharedIbanName(sharedContact) + ' — Debitor bitte manuell in Campai zuweisen', cfg);
+  } else if (!createDebitor(c.contactId, d, cfg)) {
     sendAdminWarning(d, c.contactId, 'Debitor konnte nicht angelegt werden', cfg);
+  }
 
   const typ = isMinor ? 'Spieler:in (minderjährig)' : 'Spieler:in';
   sendEmails(d, c.contactId, _mandateRef, typ, cfg);
@@ -571,13 +622,18 @@ function handleSchule(d, cfg) {
     + '\nErziehungsberechtigte/r: '
     + (d.elternVorname || '') + ' ' + (d.elternNachname || '');
 
+  const sharedContact = findContactByIban(d.iban, cfg);
   const { _mandateRef, payload } = buildPersonPayload(
-    d, ['Neu', 'Schule'], [GROUPS.SM], note, cfg);
+    d, ['Neu', 'Schule'], [GROUPS.SM], note, cfg, { sharedIbanContact: sharedContact });
   const c = createContact(payload, cfg);
   if (!c.success) return c;
 
-  if (!createDebitor(c.contactId, d, cfg))
+  if (sharedContact) {
+    sendAdminWarning(d, c.contactId,
+      'IBAN geteilt mit ' + sharedIbanName(sharedContact) + ' — Debitor bitte manuell in Campai zuweisen', cfg);
+  } else if (!createDebitor(c.contactId, d, cfg)) {
     sendAdminWarning(d, c.contactId, 'Debitor konnte nicht angelegt werden', cfg);
+  }
 
   sendEmails(d, c.contactId, _mandateRef, 'Schulprogramm', cfg);
   return { success: true, contactId: c.contactId };
@@ -590,21 +646,27 @@ function handleFoerder(d, cfg) {
   const isFirma = !!(d.firmenname && d.firmenname.trim());
   let built, typ;
 
+  const sharedContact = findContactByIban(d.iban, cfg);
+
   if (isFirma) {
-    built = buildOrgPayload(d, cfg);
+    built = buildOrgPayload(d, cfg, { sharedIbanContact: sharedContact });
     typ   = 'Fördermitglied (Firma)';
   } else {
     built = buildPersonPayload(
       d, ['Neu', 'Förderer'], [GROUPS.FOE],
-      'Fördermitglied Einzelperson', cfg);
+      'Fördermitglied Einzelperson', cfg, { sharedIbanContact: sharedContact });
     typ = 'Fördermitglied';
   }
 
   const c = createContact(built.payload, cfg);
   if (!c.success) return c;
 
-  if (!createDebitor(c.contactId, d, cfg))
+  if (sharedContact) {
+    sendAdminWarning(d, c.contactId,
+      'IBAN geteilt mit ' + sharedIbanName(sharedContact) + ' — Debitor bitte manuell in Campai zuweisen', cfg);
+  } else if (!createDebitor(c.contactId, d, cfg)) {
     sendAdminWarning(d, c.contactId, 'Debitor konnte nicht angelegt werden', cfg);
+  }
 
   sendEmails(d, c.contactId, built._mandateRef, typ, cfg);
   return { success: true, contactId: c.contactId };
