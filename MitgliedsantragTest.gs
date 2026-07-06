@@ -363,6 +363,92 @@ function repairFankindTags() {
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
+// ============================================================
+// DIAGNOSE: Debitor-Struktur bei geteilter IBAN erforschen
+// ============================================================
+// Anlass: Matthias Sparding hat sich angemeldet, seine Frau wollte
+// sich mit der GLEICHEN IBAN als separates Mitglied anmelden —
+// Campai lehnte ab. Wir wollen Variante B (Debitor-Sharing) bauen,
+// muessen aber erst wissen, ueber welches Feld ein Kontakt einen
+// FREMDEN Debitor referenzieren kann.
+//
+// Was die Funktion macht:
+//   1. Findet Matthias per Nachname (personal.personLastName)
+//   2. Loggt sein billing-Objekt (sepaIBAN, debtor, payer)
+//   3. Probiert IBAN-basierte Contact-Suche (fuer findContactByIban)
+//   4. Probiert diverse Debitor-Endpoints (/debtors, /contacts/{id}/debtors)
+//   5. Sucht nach Frau Sparding (falls der Kontakt trotz Fehler angelegt wurde)
+// ============================================================
+function inspectDebtorSetup() {
+  const cfg = getCFG();
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('▶ INSPEKTION: Debitor-Setup fuer Sparding');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  // 1. Alle Sparding-Kontakte finden
+  Logger.log('▶ 1. Alle Sparding-Kontakte suchen');
+  const path = '/contacts?organisation=' + cfg.orgId + '&personal.personLastName=' + encodeURIComponent('Sparding');
+  const r = apiCall('get', path, undefined, cfg);
+  Logger.log('  HTTP ' + r.code);
+  const list = Array.isArray(r.json) ? r.json : ((r.json && r.json.data) || []);
+  Logger.log('  Treffer: ' + list.length);
+  list.forEach(function(c) {
+    const p = c.personal || {};
+    Logger.log('    - ' + c._id + ' | ' + (p.personFirstName || '') + ' ' + (p.personLastName || '') + ' | type=' + c.type);
+  });
+  if (list.length === 0) {
+    Logger.log('❌ Keine Sparding-Kontakte gefunden. Ohne Grundlage kein Diagnose.');
+    return;
+  }
+  const matthias = list[0];  // Annahme: erster Treffer ist Matthias
+  const iban = (matthias.billing && matthias.billing.sepaIBAN) || '';
+  Logger.log('');
+  Logger.log('▶ Referenz-Kontakt: ' + matthias._id + ' (' + (matthias.personal && matthias.personal.personFirstName) + ')');
+  Logger.log('  IBAN (aus billing.sepaIBAN): ' + iban);
+  Logger.log('  billing:  ' + JSON.stringify(matthias.billing));
+
+  // 2. IBAN-basierte Suche testen
+  Logger.log('');
+  Logger.log('▶ 2. IBAN-basierte Kontakt-Suche testen');
+  const ibanSearches = [
+    '/contacts?organisation=' + cfg.orgId + '&billing.sepaIBAN=' + encodeURIComponent(iban),
+    '/contacts?organisation=' + cfg.orgId + '&sepaIBAN=' + encodeURIComponent(iban),
+  ];
+  ibanSearches.forEach(function(p) {
+    const rr = apiCall('get', p, undefined, cfg);
+    const cnt = Array.isArray(rr.json) ? rr.json.length : ((rr.json && rr.json.data) ? rr.json.data.length : 'n/a');
+    Logger.log('  ' + p + ' → HTTP ' + rr.code + ' | Treffer: ' + cnt);
+  });
+
+  // 3. Debitor-Endpoints probieren
+  Logger.log('');
+  Logger.log('▶ 3. Debitor-Endpoints probieren');
+  const debtorId = matthias.billing && matthias.billing.debtor;
+  const debtorTries = [
+    '/debtors?organisation=' + cfg.orgId,
+    '/contacts/' + matthias._id + '/debtors',
+    debtorId ? '/debtors/' + debtorId : null,
+    debtorId ? '/finance/accounts/debtors/' + debtorId : null,
+  ].filter(Boolean);
+  debtorTries.forEach(function(p) {
+    const rr = apiCall('get', p, undefined, cfg);
+    Logger.log('  ' + p + ' → HTTP ' + rr.code);
+    if (rr.code === 200 && rr.json) {
+      Logger.log('    Antwort (600 Zeichen): ' + JSON.stringify(rr.json).substring(0, 600));
+    } else if (rr.json) {
+      Logger.log('    Fehler: ' + JSON.stringify(rr.json).substring(0, 200));
+    }
+  });
+
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Diagnose fertig. Aus dem Log ableiten:');
+  Logger.log('  - Funktioniert billing.sepaIBAN als Suchfilter?');
+  Logger.log('  - Welcher Debitor-Endpoint liefert Debitor-Details?');
+  Logger.log('  - Wie sieht ein Debitor-Objekt aus (payer, contacts-Liste)?');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
 // Variante mit Contact-ID, falls die Suche nicht klappt
 function inspectContactById() {
   const cfg = getCFG();

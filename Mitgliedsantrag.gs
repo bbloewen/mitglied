@@ -199,6 +199,28 @@ function findContactByEmail(email, cfg) {
   return null;
 }
 
+// Sucht einen bestehenden Kontakt anhand seiner SEPA-IBAN.
+// Liefert das VOLLSTAENDIGE Kontakt-Objekt (nicht nur die ID), weil die
+// aufrufende Stelle typischerweise auch billing.debtor und billing.payer
+// des bestehenden Kontakts braucht, um den neuen Kontakt darauf zu
+// referenzieren (Debitor-Sharing bei gleicher IBAN).
+function findContactByIban(iban, cfg) {
+  const cleaned = String(iban || '').replace(/\s/g, '').toUpperCase();
+  if (!cleaned) return null;
+  const res = apiCall('get',
+    '/contacts?organisation=' + cfg.orgId + '&billing.sepaIBAN=' + encodeURIComponent(cleaned),
+    undefined, cfg);
+  if (res.code === 200) {
+    const list = Array.isArray(res.json) ? res.json : (res.json.data || []);
+    if (list.length > 0) {
+      Logger.log('✅ Kontakt mit IBAN ' + cleaned + ' gefunden: ' + list[0]._id);
+      return list[0];
+    }
+  }
+  Logger.log('ℹ️ Kein Kontakt mit IBAN ' + cleaned + ' gefunden');
+  return null;
+}
+
 // alternateContacts erwartet Array von Objekten {description, contact}, NICHT
 // nackte String-IDs. Falsche Form fuehrt zu {description:null, contact:null}-
 // Skeletten in Campai, was das Rendering der Detail-Ansicht blockiert
