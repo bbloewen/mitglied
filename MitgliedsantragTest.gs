@@ -366,7 +366,7 @@ function repairFankindTags() {
 // ============================================================
 // DIAGNOSE: Debitor-Struktur bei geteilter IBAN erforschen
 // ============================================================
-// Anlass: Matthias Sparding hat sich angemeldet, seine Frau wollte
+// Anlass: Matthias Spading hat sich angemeldet, seine Frau wollte
 // sich mit der GLEICHEN IBAN als separates Mitglied anmelden —
 // Campai lehnte ab. Wir wollen Variante B (Debitor-Sharing) bauen,
 // muessen aber erst wissen, ueber welches Feld ein Kontakt einen
@@ -377,18 +377,18 @@ function repairFankindTags() {
 //   2. Loggt sein billing-Objekt (sepaIBAN, debtor, payer)
 //   3. Probiert IBAN-basierte Contact-Suche (fuer findContactByIban)
 //   4. Probiert diverse Debitor-Endpoints (/debtors, /contacts/{id}/debtors)
-//   5. Sucht nach Frau Sparding (falls der Kontakt trotz Fehler angelegt wurde)
+//   5. Sucht nach Frau Spading (falls der Kontakt trotz Fehler angelegt wurde)
 // ============================================================
 function inspectDebtorSetup() {
   const cfg = getCFG();
 
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('▶ INSPEKTION: Debitor-Setup fuer Sparding');
+  Logger.log('▶ INSPEKTION: Debitor-Setup fuer Spading');
   Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-  // 1. Alle Sparding-Kontakte finden
-  Logger.log('▶ 1. Alle Sparding-Kontakte suchen');
-  const path = '/contacts?organisation=' + cfg.orgId + '&personal.personLastName=' + encodeURIComponent('Sparding');
+  // 1. Alle Spading-Kontakte finden
+  Logger.log('▶ 1. Alle Spading-Kontakte suchen');
+  const path = '/contacts?organisation=' + cfg.orgId + '&personal.personLastName=' + encodeURIComponent('Spading');
   const r = apiCall('get', path, undefined, cfg);
   Logger.log('  HTTP ' + r.code);
   const list = Array.isArray(r.json) ? r.json : ((r.json && r.json.data) || []);
@@ -398,7 +398,7 @@ function inspectDebtorSetup() {
     Logger.log('    - ' + c._id + ' | ' + (p.personFirstName || '') + ' ' + (p.personLastName || '') + ' | type=' + c.type);
   });
   if (list.length === 0) {
-    Logger.log('❌ Keine Sparding-Kontakte gefunden. Ohne Grundlage kein Diagnose.');
+    Logger.log('❌ Keine Spading-Kontakte gefunden. Ohne Grundlage kein Diagnose.');
     return;
   }
   const matthias = list[0];  // Annahme: erster Treffer ist Matthias
